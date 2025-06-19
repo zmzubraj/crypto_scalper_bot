@@ -1,0 +1,75 @@
+# === BOT BEHAVIOUR & GLOBAL SETTINGS =========================================
+bot:
+  mode: live                     # live | paper | backtest
+  base_currency: USDT
+  starting_capital: 500          # only used in paper/backtest
+  trading_pairs:                 # Binance symbols (spot)
+    - BTCUSDT
+    - ETHUSDT
+    - LTCUSDT
+    - SOLUSDT
+    - DOGEUSDT
+    - PEPEUSDT
+    - XRPUSDT
+    - SUIUSDT
+    - TAOUSDT
+
+# === RISK MANAGEMENT =========================================================
+risk:
+  max_daily_drawdown_pct: 5          # circuit-breaker for the day
+  max_trade_risk_pct: 1.5            # % of account to risk per single trade
+  position_size_method: volatility   # fixed | volatility
+  volatility_lookback_min: 30        # minutes for ATR/σ volatility sizing
+
+# === TAKE-PROFIT / STOP-LOSS TEMPLATE =======================================
+exit:
+  take_profit_pct: 0.5               # initial TP 0.5 %
+  stop_loss_pct: 0.25                # initial SL 0.25 %
+  trailing_stop: true
+  trailing_start_pct: 0.3
+  trailing_delta_pct: 0.15
+  time_stop_minutes: 10              # auto-close if trade open longer
+
+# === STRATEGY ENGINE =========================================================
+strategy_router:
+  # Simple regime switch: ATR-based volatility threshold
+  vol_threshold_pct: 0.05
+  low_vol_strategy: mean_reversion   # options: momentum | mean_reversion
+  high_vol_strategy: momentum
+  confidence_threshold: 0.80         # min model probability to act
+
+# === MODEL SETTINGS ==========================================================
+model:
+  # Choose which predictor to load – you can swap file names in experiments
+  primary_model_path: models/trained/random_forest_v1.pkl
+  features:
+    - rsi_7
+    - ema_5
+    - ema_15
+    - bollinger_width
+    - volume_zscore
+    - sentiment_score
+  prediction_horizon_min: 2          # model forecasts 2-minute move
+
+# === SENTIMENT ANALYSIS ======================================================
+sentiment:
+  polling_interval_sec: 60           # scrape tweets/reddit & update score
+  min_mentions: 20                   # ignore if <20 mentions last interval
+  positive_threshold: 0.15
+  negative_threshold: -0.15
+
+# === LOGGING & ALERTS ========================================================
+logging:
+  level: INFO                        # DEBUG | INFO | WARNING | ERROR
+  notify_on_fill: true
+  notify_on_error: true
+  notifier:
+    method: print                    # print | telegram | email
+    telegram_bot_token: ""
+    telegram_chat_id: ""
+
+# === PATHS & PERSISTENCE =====================================================
+storage:
+  db_path: data/trade_history.db
+  sentiment_cache: data/sentiment_data/
+  model_cache: models/trained/
