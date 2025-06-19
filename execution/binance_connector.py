@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 import yaml
-from binance.async_client import AsyncClient
+from binance import AsyncClient
 from binance import BinanceSocketManager
 from binance.enums import ORDER_TYPE_MARKET, TIME_IN_FORCE_GTC, SIDE_BUY, SIDE_SELL
 from binance.exceptions import BinanceAPIException, BinanceOrderException
