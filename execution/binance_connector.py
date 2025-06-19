@@ -26,8 +26,9 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 import yaml
-from binance import AsyncClient, BinanceSocketManager
-from binance.enums import *
+from binance.async_client import AsyncClient
+from binance import BinanceSocketManager
+from binance.enums import ORDER_TYPE_MARKET, TIME_IN_FORCE_GTC, SIDE_BUY, SIDE_SELL
 from binance.exceptions import BinanceAPIException, BinanceOrderException
 
 # -----------------------------------------------------------------------------
@@ -128,8 +129,10 @@ class BinanceConnector:
     # ------------------------------------------------------------------ #
     async def __aenter__(self):
         self._client = await AsyncClient.create(
-            self._api_key, self._api_secret, testnet=self._testnet, recv_window=self._recv_window
+            self._api_key, self._api_secret, testnet=self._testnet
         )
+        if self._client is None:
+            raise RuntimeError("Failed to initialize Binance AsyncClient")
         self._bsm = BinanceSocketManager(self._client)
         logger.info("Connected to Binance (testnet=%s)", self._testnet)
         return self
@@ -137,8 +140,7 @@ class BinanceConnector:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self._user_stream_task:
             self._user_stream_task.cancel()
-        if self._bsm:
-            await self._bsm.close()
+        # BinanceSocketManager does not require explicit close
         if self._client:
             await self._client.close_connection()
         logger.info("Binance connection closed.")
@@ -232,7 +234,9 @@ class BinanceConnector:
     async def cancel_open_orders(self, symbol: str) -> None:
         if not self._client:
             raise RuntimeError("Client not initialized")
-        await self._client.cancel_open_orders(symbol=symbol)
+        open_orders = await self._client.get_open_orders(symbol=symbol)
+        for order in open_orders:
+            await self._client.cancel_order(symbol=symbol, orderId=order["orderId"])
         logger.info("Cancelled all open orders for %s", symbol)
 
     # ------------------------------------------------------------------ #
@@ -249,12 +253,15 @@ class BinanceConnector:
             logger.warning("User stream already running")
             return
 
+        if not self._client:
+            raise RuntimeError("Client not initialized")
         self._listen_key = await self._client.stream_get_listen_key()
-        socket = self._bsm.user_socket(self._listen_key)
+        socket = self._bsm.user_socket()
 
         async def _run():
             async with socket as s:
-                async for msg in s:
+                while True:
+                    msg = await s.recv()
                     await callback(msg)
 
         self._user_stream_task = asyncio.create_task(_run())
@@ -287,8 +294,12 @@ class BinanceConnector:
 
     def _get_exchange_info(self, symbol: str) -> Dict[str, Any]:
         if symbol not in self._exchange_info_cache:
+            if not self._client:
+                raise RuntimeError("Client not initialized")
             loop = asyncio.get_event_loop()
             info = loop.run_until_complete(self._client.get_symbol_info(symbol))
+            if info is None:
+                raise ValueError(f"Exchange info for symbol '{symbol}' not found")
             self._exchange_info_cache[symbol] = info
         return self._exchange_info_cache[symbol]
 
